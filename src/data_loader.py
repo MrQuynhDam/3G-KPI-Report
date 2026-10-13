@@ -40,13 +40,14 @@ def process_data(file_input):
         extracted_site = df[cell_col_name].astype(str).str.extract(r'3G_([A-Za-z0-9]{6})')[0]
         df["Site Name"] = extracted_site.fillna(df[cell_col_name])
 
-    # Bóc tách Freqband (Sóng mang M1, M4...) và Cell Type (VNP vs MORAN)
+    # Bóc tách Freqband (F1, F2, F3...) và Cell Type (VNP vs MORAN)
     if cell_col_name and cell_col_name in df.columns:
         cell_s = df[cell_col_name].astype(str).str.strip()
         is_moran = cell_s.str.upper().str.startswith("VNP-")
-        core = cell_s.where(~is_moran, cell_s.str[4:])
-        extracted_fb = core.str.extract(r'3G_[A-Za-z0-9]{6}([A-Za-z][0-9]?)')[0]
-        df["Freqband"] = extracted_fb.fillna("N/A")
+        
+        # Bóc tách chữ số tầng tần số ngay sau ký tự sóng mang (M11 -> F1, M21 -> F2, M31 -> F3)
+        extracted_num = cell_s.str.extract(r'[A-Za-z](\d)\d(?:_|$)')[0]
+        df["Freqband"] = ("F" + extracted_num).fillna("N/A")
         df["Cell Type"] = np.where(is_moran, "MORAN", "VNP")
 
     # Xử lý Ngày / Giờ / DateTime
