@@ -64,9 +64,39 @@ sel_cells = []
 
 if cell_col and cell_col in df.columns:
     all_cells = sorted(df[cell_col].dropna().unique().tolist())
-    select_all = st.sidebar.checkbox("Select all", value=True)
-    default_selected = all_cells if select_all else []
-    sel_cells = st.sidebar.multiselect("Chọn Cell", options=all_cells, default=default_selected, label_visibility="collapsed")
+
+    # Khởi tạo trạng thái chọn tất cả mặc định
+    if "selected_cells" not in st.session_state:
+        st.session_state["selected_cells"] = all_cells
+
+    # Callback khi tích/bỏ tích "Select all"
+    def on_select_all_change():
+        if st.session_state.select_all_cb:
+            st.session_state.selected_cells = all_cells
+        else:
+            st.session_state.selected_cells = []
+
+    # Callback khi thay đổi danh sách Cell thủ công
+    def on_cell_multiselect_change():
+        st.session_state.select_all_cb = (len(st.session_state.selected_cells) == len(all_cells))
+
+    # Nút Select All Checkbox
+    st.sidebar.checkbox(
+        "Select all",
+        value=(len(st.session_state.get("selected_cells", [])) == len(all_cells)),
+        key="select_all_cb",
+        on_change=on_select_all_change,
+    )
+
+    # Ô Multiselect chọn Cell
+    sel_cells = st.sidebar.multiselect(
+        "Chọn Cell",
+        options=all_cells,
+        key="selected_cells",
+        on_change=on_cell_multiselect_change,
+        label_visibility="collapsed",
+    )
+
     filtered_df = df[(df["Date"].isin(sel_dates)) & (df[cell_col].isin(sel_cells))]
 else:
     filtered_df = df[df["Date"].isin(sel_dates)] if "Date" in df.columns else df.copy()
