@@ -5,6 +5,7 @@ from src.config import CUSTOM_CSS
 from src.data_loader import process_data
 from src.ui_components import (
     render_kpi_cards,
+    render_freqband_section,
     render_trend_chart,
     render_top_traffic_section,
     render_worst_cells_and_pdf,
@@ -19,7 +20,7 @@ st.set_page_config(
 )
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-# 2. Sidebar Navigation & Load Dữ Liệu
+# 2. Sidebar Navigation & Data Load
 st.sidebar.title("📶 3G Navigation")
 
 sample_file_paths = ["data/3G_Sample.csv", "3G_Sample.csv", "3G.csv"]
@@ -85,6 +86,9 @@ st.markdown("---")
 render_kpi_cards(filtered_df)
 st.markdown("---")
 
+fb_cell_counts, fb_tf_df, cell_type_counts, fb_type_xtab, fb_cv_df = render_freqband_section(filtered_df, cell_col)
+st.markdown("---")
+
 render_trend_chart(filtered_df, has_hour)
 st.markdown("---")
 
@@ -92,7 +96,8 @@ top_cell_df, top_site_df, cell_agg_all = render_top_traffic_section(filtered_df,
 st.markdown("---")
 
 render_worst_cells_and_pdf(
-    filtered_df, site_col, cell_col, cell_agg_all, top_site_df, top_cell_df, sel_dates, sel_sites, has_hour
+    filtered_df, site_col, cell_col, cell_agg_all, top_site_df, top_cell_df,
+    fb_cell_counts, fb_tf_df, cell_type_counts, fb_type_xtab, fb_cv_df, sel_dates, sel_sites, has_hour
 )
 
 st.caption("🚀 3G RAN Quality Report")
