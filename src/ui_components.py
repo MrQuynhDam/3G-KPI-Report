@@ -131,7 +131,7 @@ def render_freqband_section(filtered_df, cell_col):
 
 def render_trend_chart(filtered_df, has_hour):
     """Biểu đồ xu hướng kết hợp Traffic & KPI 3G theo Freqband."""
-    st.subheader("📈 Biểu Đồ Tương Quan Xu Hướng KPI 3G")
+    st.subheader("📈 Biểu Đồ Tương Quan Xu HƯỚNG KPI 3G")
 
     kpi_dict = {
         "CSSR - Tỷ lệ thiết lập (%)": "CSSR",
@@ -205,8 +205,13 @@ def render_trend_chart(filtered_df, has_hour):
         fb_suffix = f" (Freqband: {sel_fb})" if sel_fb != "Tất cả Freqband" else ""
         fig.update_layout(title_text=f"📊 Biểu đồ Traffic (Erl) và {sel_kpi_lbl}{fb_suffix}", template="plotly_dark", hovermode="x unified", height=420, margin=dict(l=10, r=10, t=40, b=10))
         fig.update_xaxes(title_text=x_title, type="category")
-        fig.update_yaxes(title_text="CS Traffic (Erl)", secondary_y=False, showgrid=False)
-        fig.update_yaxes(title_text=sel_kpi_lbl, secondary_y=True, showgrid=True, gridcolor="rgba(255,255,255,0.1)")
+        
+        # Định dạng trục Y1 (Traffic) làm tròn 2 số thập phân
+        fig.update_yaxes(title_text="CS Traffic (Erl)", secondary_y=False, showgrid=False, tickformat=".2f")
+        
+        # Định dạng trục Y2 (KPI): Nếu là CALLVOLUME thì để số nguyên, ngược lại làm tròn 2 số thập phân
+        kpi_tick_fmt = ",.0f" if sel_kpi_col == "CALLVOLUME" else ".2f"
+        fig.update_yaxes(title_text=sel_kpi_lbl, secondary_y=True, showgrid=True, gridcolor="rgba(255,255,255,0.1)", tickformat=kpi_tick_fmt)
 
         st.plotly_chart(fig, use_container_width=True)
 
