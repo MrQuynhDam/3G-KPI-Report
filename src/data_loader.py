@@ -40,6 +40,15 @@ def process_data(file_input):
         extracted_site = df[cell_col_name].astype(str).str.extract(r'3G_([A-Za-z0-9]{6})')[0]
         df["Site Name"] = extracted_site.fillna(df[cell_col_name])
 
+    # Bóc tách Freqband (Sóng mang M1, M4...) và Cell Type (VNP vs MORAN)
+    if cell_col_name and cell_col_name in df.columns:
+        cell_s = df[cell_col_name].astype(str).str.strip()
+        is_moran = cell_s.str.upper().str.startswith("VNP-")
+        core = cell_s.where(~is_moran, cell_s.str[4:])
+        extracted_fb = core.str.extract(r'3G_[A-Za-z0-9]{6}([A-Za-z][0-9]?)')[0]
+        df["Freqband"] = extracted_fb.fillna("N/A")
+        df["Cell Type"] = np.where(is_moran, "MORAN", "VNP")
+
     # Xử lý Ngày / Giờ / DateTime
     if "Date" in df.columns:
         df["Date_dt"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
@@ -119,7 +128,6 @@ def aggregate_kpis(df_in, group_cols):
 
 
 def calc_weighted_avg(df_in, kpi_col, weight_col="TRAFFIC"):
-    """Tính trung bình trọng số cho 1 KPI cụ thể."""
     if kpi_col not in df_in.columns:
         return 0.0
 
