@@ -10,7 +10,7 @@ from reportlab.platypus import (
 
 from src.config import FONT_NAME, FONT_NAME_BOLD
 
-def generate_pdf_report(summary, hourly_trend_df, top10_sites, top10_cells, worst10_cssr, worst10_dcr, worst10_soft, worst10_cong):
+def generate_pdf_report(summary, hourly_trend_df, top10_sites, top10_cells, worst10_cssr, worst10_dcr, worst10_soft, worst10_cong, fb_cell_counts=None, fb_tf_df=None, cell_type_counts=None, fb_type_xtab=None, fb_cv_df=None):
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
     story = []
@@ -67,10 +67,123 @@ def generate_pdf_report(summary, hourly_trend_df, top10_sites, top10_cells, wors
         ('RIGHTPADDING', (0,0), (-1,-1), 1),
     ]))
     story.append(grid_cards)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 8))
 
-    # MỤC II. CHARTS XU HƯỚNG
-    story.append(Paragraph("II. XU HƯỚNG CÁC CHỈ SỐ KPI CHÍNH", h2_style))
+    # MỤC II. FREQBAND CHARTS (LƯỚI 2x2)
+    _has = lambda d: d is not None and not d.empty
+    if _has(fb_cell_counts) or _has(fb_tf_df) or _has(cell_type_counts) or _has(fb_cv_df):
+        story.append(Paragraph("II. THỐNG KÊ PHÂN BỔ CELL, TRAFFIC VÀ CALL VOLUME THEO FREQBAND", h2_style))
+        story.append(Spacer(1, 2))
+
+        fb_img_buf = io.BytesIO()
+        fig_fb, ((ax1_fb, ax_ct), (ax2_fb, ax3_fb)) = plt.subplots(2, 2, figsize=(11, 4.2), dpi=150)
+        fb_colors = ['#0284c7', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4']
+
+        def _donut(ax, labels, sizes, cols, title):
+            _, texts, autotexts = ax.pie(
+                sizes, labels=labels, autopct=lambda p: f"{p:.1f}%", startangle=90,
+                colors=cols, wedgeprops=dict(width=0.45, edgecolor='white')
+            )
+            for t in texts: t.set_fontsize(7)
+            for at in autotexts: at.set_fontsize(6.5); at.set_weight('bold')
+            ax.set_title(title, fontsize=8, fontweight='bold', pad=4)
+
+        if _has(fb_cell_counts):
+            fb_labels = [f"{b} ({n})" for b, n in zip(fb_cell_counts["Freqband"], fb_cell_counts["Số lượng Cell"])]
+            _donut(ax1_fb, fb_labels, fb_cell_counts["Số lượng Cell"].tolist(), fb_colors[:len(fb_labels)], "Số lượng Cell theo Freqband")
+        else: ax1_fb.axis('off')
+
+        if _has(cell_type_counts):
+            ct_cmap = {"VNP": "#3b82f6", "MORAN": "#f59e0b"}
+            ct_labels = [f"{t} ({n})" for t, n in zip(cell_type_counts["Cell Type"], cell_type_counts["Số lượng Cell"])]
+            ct_cols = [ct_cmap.get(t, '#94a3b8') for t in cell_type_counts["Cell Type"]]
+            _donut(ax_ct, ct_labels, cell_type_counts["Số lượng Cell"].tolist(), ct_cols, "Số lượng Cell theo Loại Cell")
+        else: ax_ct.axis('off')
+
+        if _has(fb_tf_df):
+            fb_bands = fb_tf_df["Freqband"].tolist()
+            fb_traffics = fb_tf_df["TRAFFIC"].tolist()
+            fb_bars = ax2_fb.bar(fb_bands, fb_traffics, color='#0284c7', width=0.45, alpha=0.85)
+            ax2_fb.set_title("Tổng CS Traffic (Erl) theo Freqband", fontsize=8, fontweight='bold', pad=4)
+            ax2_fb.set_ylabel("Traffic (Erl)", fontsize=7)
+            ax2_fb.tick_params(axis='both', labelsize=6.5)
+            ax2_fb.grid(True, linestyle='--', alpha=0.25, axis='y')
+
+            max_tf = max(fb_traffics) if fb_traffics else 1
+            ax2_fb.set_ylim(0, max_tf * 1.18)
+
+            for bar in fb_bars:
+                yval = bar.get_height()
+                ax2_fb.text(bar.get_x() + bar.get_width()/2.0, yval + (max_tf * 0.02), f"{yval:,.1f}", ha='center', va='bottom', fontsize=6, fontweight='bold')
+        else: ax2_fb.axis('off')
+
+        if _has(fb_cv_df) and "CALLVOLUME" in fb_cv_df.columns:
+            cv_bands = fb_cv_df["Freqband"].tolist()
+            cv_vals = fb_cv_df["CALLVOLUME"].tolist()
+            cv_bars = ax3_fb.bar(cv_bands, cv_vals, color='#8b5cf6', width=0.45, alpha=0.85)
+            ax3_fb.set_title("Tổng Call Volume theo Freqband", fontsize=8, fontweight='bold', pad=4)
+            ax3_fb.set_ylabel("Call Volume", fontsize=7)
+            ax3_fb.tick_params(axis='both', labelsize=6.5)
+            ax3_fb.grid(True, linestyle='--', alpha=0.25, axis='y')
+
+            max_cv = max(cv_vals) if cv_vals else 1
+            ax3_fb.set_ylim(0, max_cv * 1.18)
+
+            for bar in cv_bars:
+                yval = bar.get_height()
+                ax3_fb.text(bar.get_x() + bar.get_width()/2.0, yval + (max_cv * 0.02), f"{yval:,.0f}", ha='center', va='bottom', fontsize=6, fontweight='bold')
+        else: ax3_fb.axis('off')
+
+        plt.tight_layout()
+        plt.savefig(fb_img_buf, format='png', dpi=150)
+        plt.close()
+        fb_img_buf.seek(0)
+        story.append(Image(fb_img_buf, width=740, height=280))
+        story.append(Spacer(1, 4))
+
+        if _has(fb_type_xtab):
+            _ps = ParagraphStyle("FBT", fontName=FONT_NAME, fontSize=7.5, textColor=colors.HexColor("#334155"), alignment=1)
+            _pw = ParagraphStyle("FBTW", parent=_ps, textColor=colors.white)
+            def _c(txt, bold=False, white=False): return Paragraph(f"<b>{txt}</b>" if bold else str(txt), _pw if white else _ps)
+
+            tf_map = dict(zip(fb_tf_df["Freqband"], fb_tf_df["TRAFFIC"])) if _has(fb_tf_df) else {}
+            cv_map = dict(zip(fb_cv_df["Freqband"], fb_cv_df["CALLVOLUME"])) if (_has(fb_cv_df) and "CALLVOLUME" in fb_cv_df.columns) else {}
+            grand = int(fb_type_xtab["Tổng"].sum()) or 1
+
+            story.append(Paragraph("<b>Thống kê số lượng Cell, CS Traffic & Call Volume theo Freqband và Loại Cell:</b>", norm_style))
+            story.append(Spacer(1, 2))
+            hdr = ["Freqband", "Cell VNP", "Cell MORAN", "Tổng Cell", "Tỷ lệ (%)", "Traffic (Erl)", "Call Volume"]
+            rows = [[_c(h, True, True) for h in hdr]]
+            for _, r in fb_type_xtab.iterrows():
+                fb = r["Freqband"]
+                rows.append([
+                    _c(fb), _c(int(r["VNP"])), _c(int(r["MORAN"])), _c(int(r["Tổng"])),
+                    _c(f"{r['Tổng'] / grand * 100:.1f}"),
+                    _c(f"{tf_map[fb]:,.2f}" if fb in tf_map and pd.notnull(tf_map[fb]) else "-"),
+                    _c(f"{cv_map[fb]:,.0f}" if fb in cv_map and pd.notnull(cv_map[fb]) else "-"),
+                ])
+            tot_tf = sum(v for v in tf_map.values() if pd.notnull(v)) if tf_map else None
+            tot_cv = summary.get('cv', 0)
+            rows.append([
+                _c("Tổng", True), _c(int(fb_type_xtab["VNP"].sum()), True), _c(int(fb_type_xtab["MORAN"].sum()), True),
+                _c(grand if grand != 1 or fb_type_xtab["Tổng"].sum() else 0, True), _c("100.0", True),
+                _c(f"{tot_tf:,.2f}" if tot_tf is not None else "-", True),
+                _c(f"{tot_cv:,.0f}" if tot_cv is not None else "-", True),
+            ])
+            t_fb = Table(rows, colWidths=[95, 95, 95, 95, 95, 115, 110], hAlign="LEFT")
+            t_fb.setStyle(TableStyle([
+                ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#0284c7")),
+                ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#e2e8f0")),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 2.5),
+                ("TOPPADDING", (0,0), (-1,-1), 2.5),
+                ("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+                ("ROWBACKGROUNDS", (0,1), (-1,-2), [colors.white, colors.HexColor("#f8fafc")]),
+            ]))
+            story.append(t_fb)
+        story.append(Spacer(1, 8))
+
+    # MỤC III. CHARTS XU HƯỚNG
+    story.append(Paragraph("III. XU HƯỚNG CÁC CHỈ SỐ KPI CHÍNH", h2_style))
     story.append(Spacer(1, 4))
 
     if not hourly_trend_df.empty:
@@ -129,8 +242,8 @@ def generate_pdf_report(summary, hourly_trend_df, top10_sites, top10_cells, wors
 
     story.append(PageBreak())
 
-    # MỤC III. TOP SITE & WORST CELLS TABLES
-    story.append(Paragraph("III. DANH SÁCH TOP 10 HIGH TRAFFIC SITE & CELL", h2_style))
+    # MỤC IV. TOP SITE & WORST CELLS TABLES
+    story.append(Paragraph("IV. DANH SÁCH TOP 10 HIGH TRAFFIC SITE & CELL", h2_style))
     story.append(Spacer(1, 4))
 
     def p_cell(text, is_bold=False, align='left', color_hex='#0f172a'):
@@ -170,7 +283,7 @@ def generate_pdf_report(summary, hourly_trend_df, top10_sites, top10_cells, wors
         story.append(t_ts)
 
     story.append(PageBreak())
-    story.append(Paragraph("IV. DANH SÁCH WORST 10 CELLS CÁC KPI CHÍNH (CSSR, DCR, SOFTHOSR, CSCONGES)", h2_style))
+    story.append(Paragraph("V. DANH SÁCH WORST 10 CELLS CÁC KPI CHÍNH (CSSR, DCR, SOFTHOSR, CSCONGES)", h2_style))
     story.append(Spacer(1, 4))
 
     def render_worst_pdf_table(title, df_data, val_col, fmt, bg_color):
