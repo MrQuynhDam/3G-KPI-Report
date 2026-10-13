@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -47,6 +48,85 @@ def render_kpi_cards(filtered_df):
     with c6:
         v = calc_weighted_avg(filtered_df, "CSCONGES")
         render_card("Capacity", "CS Congestion Rate", f"{v:.3f}%", "<=0.500%", f"{s_cong.min():.3f}%", f"{s_cong.max():.3f}%", "Tỷ lệ nghẽn thoại CS", "GOOD" if v <= 0.5 else "WARNING")
+
+
+def render_freqband_section(filtered_df, cell_col):
+    """Hiển thị phân bổ Cell, Traffic & Call Volume theo Freqband/Sóng mang."""
+    st.subheader("📊 Thống Kê Phân Bổ Cell, Traffic & Call Volume Theo Freqband")
+
+    fb_cell_counts, fb_tf_df, cell_type_counts, fb_type_xtab, fb_cv_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    if cell_col and cell_col in filtered_df.columns and "Freqband" in filtered_df.columns:
+        _cols = [cell_col, "Freqband"] + (["Cell Type"] if "Cell Type" in filtered_df.columns else [])
+        cell_fb_df = filtered_df[_cols].drop_duplicates(subset=[cell_col])
+
+        fb_cell_counts = cell_fb_df["Freqband"].value_counts().reset_index()
+        fb_cell_counts.columns = ["Freqband", "Số lượng Cell"]
+        fb_cell_counts = fb_cell_counts.sort_values(by="Freqband")
+
+        fb_col1, fb_col2, fb_col3, fb_col4 = st.columns(4)
+
+        # 1. Số lượng Cell theo Freqband
+        fig_fb_cell = px.pie(fb_cell_counts, names="Freqband", values="Số lượng Cell", title="<b>Số lượng Cell theo Freqband</b>", hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig_fb_cell.update_traces(textinfo="label+value+percent", textfont_size=11)
+        fig_fb_cell.update_layout(template="plotly_dark", height=300, margin=dict(l=10, r=10, t=40, b=10))
+        with fb_col1: st.plotly_chart(fig_fb_cell, use_container_width=True)
+
+        # 2. Số lượng Cell theo Loại Cell
+        if "Cell Type" in cell_fb_df.columns:
+            cell_type_counts = cell_fb_df["Cell Type"].value_counts().reset_index()
+            cell_type_counts.columns = ["Cell Type", "Số lượng Cell"]
+            cell_type_counts = cell_type_counts.sort_values(by="Cell Type", ascending=False)
+
+            fb_type_xtab = pd.crosstab(cell_fb_df["Freqband"], cell_fb_df["Cell Type"])
+            for col_type in ["VNP", "MORAN"]:
+                if col_type not in fb_type_xtab.columns:
+                    fb_type_xtab[col_type] = 0
+            fb_type_xtab = fb_type_xtab.reindex(columns=["VNP", "MORAN"], fill_value=0)
+            fb_type_xtab["Tổng"] = fb_type_xtab.sum(axis=1)
+            fb_type_xtab = fb_type_xtab.sort_index().reset_index()
+
+            fig_ct = px.pie(cell_type_counts, names="Cell Type", values="Số lượng Cell", title="<b>Số lượng Cell theo Loại Cell</b>", hole=0.4, color="Cell Type", color_discrete_map={"VNP": "#3b82f6", "MORAN": "#f59e0b"})
+            fig_ct.update_traces(textinfo="label+value+percent", textfont_size=11)
+            fig_ct.update_layout(template="plotly_dark", height=300, margin=dict(l=10, r=10, t=40, b=10))
+            with fb_col2: st.plotly_chart(fig_ct, use_container_width=True)
+
+        # 3. CS Traffic (Erl) theo Freqband
+        if "TRAFFIC" in filtered_df.columns:
+            fb_tf_df = filtered_df.groupby("Freqband")["TRAFFIC"].sum().reset_index().sort_values(by="Freqband")
+            fig_fb_tf = px.bar(fb_tf_df, x="Freqband", y="TRAFFIC", text="TRAFFIC", title="<b>CS Traffic (Erl) theo Freqband</b>", color="Freqband", color_discrete_sequence=px.colors.qualitative.Set2)
+            fig_fb_tf.update_traces(texttemplate='%{text:,.1f} Erl', textposition='outside')
+            fig_fb_tf.update_layout(template="plotly_dark", height=300, showlegend=False, margin=dict(l=10, r=10, t=40, b=10), yaxis_title="Traffic (Erl)", xaxis_title="Freqband")
+            with fb_col3: st.plotly_chart(fig_fb_tf, use_container_width=True)
+
+        # 4. Call Volume theo Freqband
+        if "CALLVOLUME" in filtered_df.columns:
+            fb_cv_df = filtered_df.groupby("Freqband")["CALLVOLUME"].sum().reset_index().sort_values(by="Freqband")
+            fig_fb_cv = px.bar(fb_cv_df, x="Freqband", y="CALLVOLUME", text="CALLVOLUME", title="<b>Call Volume theo Freqband</b>", color="Freqband", color_discrete_sequence=px.colors.qualitative.Set3)
+            fig_fb_cv.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
+            fig_fb_cv.update_layout(template="plotly_dark", height=300, showlegend=False, margin=dict(l=10, r=10, t=40, b=10), yaxis_title="Call Volume", xaxis_title="Freqband")
+            with fb_col4: st.plotly_chart(fig_fb_cv, use_container_width=True)
+
+        if not fb_type_xtab.empty:
+            st.markdown("**Bảng thống kê số lượng Cell, Traffic & Call Volume theo Freqband:**")
+            _xt = fb_type_xtab.copy()
+            if not fb_tf_df.empty:
+                tf_map = dict(zip(fb_tf_df["Freqband"], fb_tf_df["TRAFFIC"]))
+                _xt["CS Traffic (Erl)"] = _xt["Freqband"].map(tf_map).round(2)
+            if not fb_cv_df.empty:
+                cv_map = dict(zip(fb_cv_df["Freqband"], fb_cv_df["CALLVOLUME"]))
+                _xt["Call Volume"] = _xt["Freqband"].map(cv_map).round(0)
+
+            total_row = {"Freqband": "Tổng", "VNP": int(_xt["VNP"].sum()), "MORAN": int(_xt["MORAN"].sum()), "Tổng": int(_xt["Tổng"].sum())}
+            if "CS Traffic (Erl)" in _xt.columns:
+                total_row["CS Traffic (Erl)"] = round(_xt["CS Traffic (Erl)"].sum(), 2)
+            if "Call Volume" in _xt.columns:
+                total_row["Call Volume"] = int(_xt["Call Volume"].sum())
+
+            df_display = pd.concat([_xt, pd.DataFrame([total_row])], ignore_index=True)
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+    return fb_cell_counts, fb_tf_df, cell_type_counts, fb_type_xtab, fb_cv_df
 
 
 def render_trend_chart(filtered_df, has_hour):
@@ -140,7 +220,7 @@ def render_top_traffic_section(filtered_df, site_col, cell_col):
     return top_cell_df, top_site_df, cell_agg_all
 
 
-def render_worst_cells_and_pdf(filtered_df, site_col, cell_col, cell_agg_all, top_site_df, top_cell_df, sel_dates, sel_sites, has_hour):
+def render_worst_cells_and_pdf(filtered_df, site_col, cell_col, cell_agg_all, top_site_df, top_cell_df, fb_cell_counts, fb_tf_df, cell_type_counts, fb_type_xtab, fb_cv_df, sel_dates, sel_sites, has_hour):
     """Bảng Worst Cells Matrix & Xuất Báo Cáo PDF cho 3G."""
     st.subheader("⚠️ Danh Sách Worst N Cells Theo Chỉ Số KPI 3G")
 
@@ -212,7 +292,8 @@ def render_worst_cells_and_pdf(filtered_df, site_col, cell_col, cell_agg_all, to
 
                         pdf_buf = generate_pdf_report(
                             summary_data, c_data_timeline, top10_sites_pdf, top10_cells_pdf,
-                            worst10_cssr, worst10_dcr, worst10_soft, worst10_cong
+                            worst10_cssr, worst10_dcr, worst10_soft, worst10_cong,
+                            fb_cell_counts, fb_tf_df, cell_type_counts, fb_type_xtab, fb_cv_df
                         )
                         st.session_state["pdf_bytes"] = pdf_buf.getvalue()
                         st.session_state["pdf_sig"] = _pdf_sig
