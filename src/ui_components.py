@@ -130,7 +130,7 @@ def render_freqband_section(filtered_df, cell_col):
 
 
 def render_trend_chart(filtered_df, has_hour):
-    """Biểu đồ xu hướng kết hợp Traffic & KPI 3G."""
+    """Biểu đồ xu hướng kết hợp Traffic & KPI 3G theo Freqband."""
     st.subheader("📈 Biểu Đồ Tương Quan Xu Hướng KPI 3G")
 
     kpi_dict = {
@@ -143,26 +143,44 @@ def render_trend_chart(filtered_df, has_hour):
     avail_kpis = {k: v for k, v in kpi_dict.items() if v in filtered_df.columns}
 
     if avail_kpis:
-        ctrl_col1, ctrl_col2 = st.columns([1, 1])
-        with ctrl_col1: time_mode = st.radio("⏱ Thời gian:", ["Chỉ theo giờ (24h Avg)", "Theo Ngày & Giờ (Timeline)"], horizontal=True)
-        with ctrl_col2: sel_kpi_lbl = st.selectbox("🎯 Chọn KPI kết hợp với Traffic:", options=list(avail_kpis.keys()))
+        ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([1, 1, 1])
+        with ctrl_col1:
+            time_mode = st.radio("⏱ Thời gian:", ["Chỉ theo giờ (24h Avg)", "Theo Ngày & Giờ (Timeline)"], horizontal=True)
+        with ctrl_col2:
+            sel_kpi_lbl = st.selectbox("🎯 Chọn KPI kết hợp với Traffic:", options=list(avail_kpis.keys()))
+        with ctrl_col3:
+            if "Freqband" in filtered_df.columns:
+                all_fb = sorted(filtered_df["Freqband"].dropna().unique().tolist())
+                fb_options = ["Tất cả Freqband"] + all_fb
+                sel_fb = st.selectbox("📡 Chọn Freqband:", options=fb_options)
+            else:
+                sel_fb = "Tất cả Freqband"
+
+        # Lọc dữ liệu theo Freqband đã chọn
+        trend_df = filtered_df.copy()
+        if sel_fb != "Tất cả Freqband" and "Freqband" in trend_df.columns:
+            trend_df = trend_df[trend_df["Freqband"] == sel_fb]
+
+        if trend_df.empty:
+            st.warning("⚠️ Không có dữ liệu cho Freqband đã chọn!")
+            return
 
         sel_kpi_col = avail_kpis[sel_kpi_lbl]
 
         if time_mode == "Chỉ theo giờ (24h Avg)":
-            if has_hour and "Hour" in filtered_df.columns:
-                c_data = aggregate_kpis(filtered_df, ["Hour"])
+            if has_hour and "Hour" in trend_df.columns:
+                c_data = aggregate_kpis(trend_df, ["Hour"])
                 x_axis = c_data["Hour"]
                 x_title = "Giờ trong ngày (0h - 23h)"
             else:
-                c_data = aggregate_kpis(filtered_df, ["Date"])
+                c_data = aggregate_kpis(trend_df, ["Date"])
                 x_axis = pd.to_datetime(c_data["Date"]).dt.strftime("%d/%m")
                 x_title = "Ngày"
         else:
-            group_cols = [col for col in ["Date", "Hour", "DateTime"] if col in filtered_df.columns]
+            group_cols = [col for col in ["Date", "Hour", "DateTime"] if col in trend_df.columns]
             if not has_hour and "Hour" in group_cols: group_cols.remove("Hour")
             if group_cols:
-                c_data = aggregate_kpis(filtered_df, group_cols)
+                c_data = aggregate_kpis(trend_df, group_cols)
                 if "DateTime" in c_data.columns:
                     c_data = c_data.sort_values(by="DateTime")
                     fmt_str = "%d/%m %H:00" if has_hour else "%d/%m"
@@ -172,7 +190,7 @@ def render_trend_chart(filtered_df, has_hour):
                 else:
                     c_data["TimeLabel"] = c_data["Hour"].astype(str) + ":00"
             else:
-                c_data = aggregate_kpis(filtered_df, ["Date"])
+                c_data = aggregate_kpis(trend_df, ["Date"])
                 c_data["TimeLabel"] = "Timeline"
 
             x_axis = c_data["TimeLabel"]
@@ -184,7 +202,8 @@ def render_trend_chart(filtered_df, has_hour):
         if sel_kpi_col in c_data.columns:
             fig.add_trace(go.Scatter(x=x_axis, y=c_data[sel_kpi_col], name=sel_kpi_lbl, mode="lines+markers", line=dict(color="#ef4444", width=2.5)), secondary_y=True)
 
-        fig.update_layout(title_text=f"📊 Biểu đồ Traffic (Erl) và {sel_kpi_lbl}", template="plotly_dark", hovermode="x unified", height=420, margin=dict(l=10, r=10, t=40, b=10))
+        fb_suffix = f" (Freqband: {sel_fb})" if sel_fb != "Tất cả Freqband" else ""
+        fig.update_layout(title_text=f"📊 Biểu đồ Traffic (Erl) và {sel_kpi_lbl}{fb_suffix}", template="plotly_dark", hovermode="x unified", height=420, margin=dict(l=10, r=10, t=40, b=10))
         fig.update_xaxes(title_text=x_title, type="category")
         fig.update_yaxes(title_text="CS Traffic (Erl)", secondary_y=False, showgrid=False)
         fig.update_yaxes(title_text=sel_kpi_lbl, secondary_y=True, showgrid=True, gridcolor="rgba(255,255,255,0.1)")
