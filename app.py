@@ -57,14 +57,17 @@ sel_dates = (
     else []
 )
 
-st.sidebar.subheader("📡 Chọn Site")
+st.sidebar.subheader("📱 Chọn Cell")
+cell_col = "Tên đối tượng" if "Tên đối tượng" in df.columns else ("Cell Name" if "Cell Name" in df.columns else None)
 site_col = "Site Name" if "Site Name" in df.columns else None
-sel_sites = []
+sel_cells = []
 
-if site_col:
-    all_sites = sorted(df[site_col].dropna().unique().tolist())
-    sel_sites = st.sidebar.multiselect("Chọn Site", options=all_sites, default=all_sites, label_visibility="collapsed")
-    filtered_df = df[(df["Date"].isin(sel_dates)) & (df[site_col].isin(sel_sites))]
+if cell_col and cell_col in df.columns:
+    all_cells = sorted(df[cell_col].dropna().unique().tolist())
+    select_all = st.sidebar.checkbox("Select all", value=True)
+    default_selected = all_cells if select_all else []
+    sel_cells = st.sidebar.multiselect("Chọn Cell", options=all_cells, default=default_selected, label_visibility="collapsed")
+    filtered_df = df[(df["Date"].isin(sel_dates)) & (df[cell_col].isin(sel_cells))]
 else:
     filtered_df = df[df["Date"].isin(sel_dates)] if "Date" in df.columns else df.copy()
 
@@ -73,7 +76,6 @@ if filtered_df.empty:
     st.stop()
 
 # 4. Header Section
-cell_col = "Tên đối tượng" if "Tên đối tượng" in df.columns else ("Cell Name" if "Cell Name" in df.columns else None)
 num_cells = filtered_df[cell_col].nunique() if cell_col and cell_col in filtered_df.columns else 0
 num_sites = filtered_df[site_col].nunique() if site_col and site_col in filtered_df.columns else 0
 has_hour = filtered_df["_has_hour_col"].iloc[0] if "_has_hour_col" in filtered_df.columns else True
@@ -97,7 +99,7 @@ st.markdown("---")
 
 render_worst_cells_and_pdf(
     filtered_df, site_col, cell_col, cell_agg_all, top_site_df, top_cell_df,
-    fb_cell_counts, fb_tf_df, cell_type_counts, fb_type_xtab, fb_cv_df, sel_dates, sel_sites, has_hour
+    fb_cell_counts, fb_tf_df, cell_type_counts, fb_type_xtab, fb_cv_df, sel_dates, sel_cells, has_hour
 )
 
 st.caption("🚀 3G RAN Quality Report")
