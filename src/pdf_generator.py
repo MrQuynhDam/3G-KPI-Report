@@ -8,9 +8,23 @@ from reportlab.platypus import (
     HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, PageBreak, Image
 )
 
-from src.config import FONT_NAME, FONT_NAME_BOLD
+from src.config import FONT_NAME
 
-def generate_pdf_report(summary, hourly_trend_df, top10_sites, top10_cells, worst10_cssr, worst10_dcr, worst10_soft, worst10_cong, fb_cell_counts=None, fb_tf_df=None, cell_type_counts=None, fb_type_xtab=None, fb_cv_df=None):
+def generate_pdf_report(
+    summary,
+    hourly_trend_df,
+    top10_sites,
+    top10_cells,
+    worst10_cssr=None,
+    worst10_dcr=None,
+    worst10_soft=None,
+    worst10_cong=None,
+    fb_cell_counts=None,
+    fb_tf_df=None,
+    cell_type_counts=None,
+    fb_type_xtab=None,
+    fb_cv_df=None
+):
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
     story = []
@@ -282,31 +296,40 @@ def generate_pdf_report(summary, hourly_trend_df, top10_sites, top10_cells, wors
         t_ts.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#0369a1")), ("BOTTOMPADDING", (0,0), (-1,-1), 3), ("TOPPADDING", (0,0), (-1,-1), 3), ("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")), ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")])]))
         story.append(t_ts)
 
-    story.append(PageBreak())
-    story.append(Paragraph("V. DANH SÁCH WORST 10 CELLS CÁC KPI CHÍNH (CSSR, DCR, SOFTHOSR, CSCONGES)", h2_style))
-    story.append(Spacer(1, 4))
+    # MỤC V. WORST 10 CELLS
+    worst_dfs = [
+        ("1. Worst 10 Cells theo Tỷ lệ Thiết lập Cuộc gọi (CSSR):", worst10_cssr, "CSSR", "{:.2f}%", "#991b1b"),
+        ("2. Worst 10 Cells theo Tỷ lệ Rớt Cuộc gọi (DCR):", worst10_dcr, "DCR", "{:.3f}%", "#b91c1c"),
+        ("3. Worst 10 Cells theo Tỷ lệ Chuyển giao Mềm (SOFTHOSR):", worst10_soft, "SOFTHOSR", "{:.2f}%", "#c2410c"),
+        ("4. Worst 10 Cells theo Tỷ lệ Nghẽn Thoại (CSCONGES):", worst10_cong, "CSCONGES", "{:.3f}%", "#ea580c"),
+    ]
 
-    def render_worst_pdf_table(title, df_data, val_col, fmt, bg_color):
-        if df_data.empty: return
-        story.append(Paragraph(f"<b>{title}</b>", norm_style))
-        story.append(Spacer(1, 2))
-        w_data = [[p_cell("Site Name", True, color_hex='#ffffff'), p_cell("Cell Name", True, color_hex='#ffffff'), p_cell("Giá trị KPI", True, color_hex='#ffffff'), p_cell("Traffic (Erl)", True, color_hex='#ffffff')]]
-        for _, r in df_data.head(10).iterrows():
-            w_data.append([
-                p_cell(r.get("Site Name", "")),
-                p_cell(r.get("Tên đối tượng", r.get("Cell Name", ""))),
-                p_cell(fmt.format(r.get(val_col, 0))),
-                p_cell(f"{r.get('TRAFFIC', 0):,.2f}")
-            ])
-        t_out = Table(w_data, colWidths=[180, 220, 170, 170])
-        t_out.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor(bg_color)), ("BOTTOMPADDING", (0,0), (-1,-1), 3), ("TOPPADDING", (0,0), (-1,-1), 3), ("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")), ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")])]))
-        story.append(t_out)
-        story.append(Spacer(1, 8))
+    has_any_worst = any(df is not None and not df.empty for _, df, _, _, _ in worst_dfs)
 
-    render_worst_pdf_table("1. Worst 10 Cells theo Tỷ lệ Thiết lập Cuộc gọi (CSSR):", worst10_cssr, "CSSR", "{:.2f}%", "#991b1b")
-    render_worst_pdf_table("2. Worst 10 Cells theo Tỷ lệ Rớt Cuộc gọi (DCR):", worst10_dcr, "DCR", "{:.3f}%", "#b91c1c")
-    render_worst_pdf_table("3. Worst 10 Cells theo Tỷ lệ Chuyển giao Mềm (SOFTHOSR):", worst10_soft, "SOFTHOSR", "{:.2f}%", "#c2410c")
-    render_worst_pdf_table("4. Worst 10 Cells theo Tỷ lệ Nghẽn Thoại (CSCONGES):", worst10_cong, "CSCONGES", "{:.3f}%", "#ea580c")
+    if has_any_worst:
+        story.append(PageBreak())
+        story.append(Paragraph("V. DANH SÁCH WORST 10 CELLS CÁC KPI CHÍNH (CSSR, DCR, SOFTHOSR, CSCONGES)", h2_style))
+        story.append(Spacer(1, 4))
+
+        def render_worst_pdf_table(title, df_data, val_col, fmt, bg_color):
+            if df_data is None or df_data.empty: return
+            story.append(Paragraph(f"<b>{title}</b>", norm_style))
+            story.append(Spacer(1, 2))
+            w_data = [[p_cell("Site Name", True, color_hex='#ffffff'), p_cell("Cell Name", True, color_hex='#ffffff'), p_cell("Giá trị KPI", True, color_hex='#ffffff'), p_cell("Traffic (Erl)", True, color_hex='#ffffff')]]
+            for _, r in df_data.head(10).iterrows():
+                w_data.append([
+                    p_cell(r.get("Site Name", "")),
+                    p_cell(r.get("Tên đối tượng", r.get("Cell Name", ""))),
+                    p_cell(fmt.format(r.get(val_col, 0))),
+                    p_cell(f"{r.get('TRAFFIC', 0):,.2f}")
+                ])
+            t_out = Table(w_data, colWidths=[180, 220, 170, 170])
+            t_out.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor(bg_color)), ("BOTTOMPADDING", (0,0), (-1,-1), 3), ("TOPPADDING", (0,0), (-1,-1), 3), ("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")), ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")])]))
+            story.append(t_out)
+            story.append(Spacer(1, 8))
+
+        for title, df_data, val_col, fmt, bg_color in worst_dfs:
+            render_worst_pdf_table(title, df_data, val_col, fmt, bg_color)
 
     doc.build(story)
     buf.seek(0)
