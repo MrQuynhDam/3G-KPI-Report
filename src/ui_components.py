@@ -244,8 +244,12 @@ def render_top_traffic_section(filtered_df, site_col, cell_col):
     return top_cell_df, top_site_df, cell_agg_all
 
 
-def render_worst_cells_and_pdf(filtered_df, site_col, cell_col, cell_agg_all, top_site_df, top_cell_df, fb_cell_counts, fb_tf_df, cell_type_counts, fb_type_xtab, fb_cv_df, sel_dates, sel_sites, has_hour):
-    """Bảng Worst Cells Matrix & Xuất Báo Cáo PDF cho 3G."""
+def render_worst_cells_and_pdf(
+    filtered_df, site_col, cell_col, cell_agg_all, top_site_df, top_cell_df,
+    fb_cell_counts, fb_tf_df, cell_type_counts, fb_type_xtab, fb_cv_df,
+    sel_dates, sel_cells, has_hour
+):
+    """Bảng Worst Cells Matrix & Xuất Báo Cáo PDF cho 3G với Checkbox chọn lọc."""
     st.subheader("⚠️ Danh Sách Worst N Cells Theo Chỉ Số KPI 3G")
 
     if cell_col and cell_col in filtered_df.columns:
@@ -275,16 +279,72 @@ def render_worst_cells_and_pdf(filtered_df, site_col, cell_col, cell_agg_all, to
                 st.markdown("---")
                 st.markdown("### 📄 PDF Report Export")
 
-                s_tr = filtered_df.get("TRAFFIC", pd.Series([0]))
-                _pdf_sig = (len(filtered_df), round(float(s_tr.sum()), 3), tuple(map(str, sel_dates)), len(sel_sites))
+                st.markdown("##### ⚙️ Lựa chọn danh sách Worst N Cells cần đưa vào PDF (3G):")
 
-                if st.button("📑 Tạo Báo Cáo PDF"):
-                    with st.spinner("Đang tạo PDF..."):
+                # Khai báo các key checkbox con cho 3G
+                child_checkbox_keys = [
+                    "chk_pdf_3g_cssr",
+                    "chk_pdf_3g_soft",
+                    "chk_pdf_3g_dcr",
+                    "chk_pdf_3g_cong",
+                ]
+
+                def toggle_select_all_3g():
+                    new_state = st.session_state.get("chk_pdf_3g_select_all", True)
+                    for key in child_checkbox_keys:
+                        st.session_state[key] = new_state
+
+                # Master Checkbox Select All
+                st.checkbox(
+                    "☑️ **Select All** (Chọn / Bỏ chọn tất cả danh mục)",
+                    value=True,
+                    key="chk_pdf_3g_select_all",
+                    on_change=toggle_select_all_3g
+                )
+
+                st.markdown("")  # Khoảng cách nhỏ
+
+                cb_col1, cb_col2 = st.columns(2)
+                selected_codes = []
+
+                for k in child_checkbox_keys:
+                    if k not in st.session_state:
+                        st.session_state[k] = True
+
+                with cb_col1:
+                    if st.checkbox("Worst 10 Call Setup Success Rate (CSSR Thấp)", key="chk_pdf_3g_cssr"):
+                        selected_codes.append("cssr")
+                    if st.checkbox("Worst 10 Soft Handover SR (SOFTHOSR Thấp)", key="chk_pdf_3g_soft"):
+                        selected_codes.append("soft")
+
+                with cb_col2:
+                    if st.checkbox("Worst 10 Drop Call Rate (DCR Cao)", key="chk_pdf_3g_dcr"):
+                        selected_codes.append("dcr")
+                    if st.checkbox("Worst 10 CS Congestion Rate (CSCONGES Cao)", key="chk_pdf_3g_cong"):
+                        selected_codes.append("cong")
+
+                st.markdown("")
+
+                s_tr = filtered_df.get("TRAFFIC", pd.Series([0]))
+                sel_dates_str = tuple(map(str, sel_dates)) if sel_dates else ()
+                sel_cells_cnt = len(sel_cells) if sel_cells else 0
+
+                _pdf_sig_3g = (
+                    len(filtered_df),
+                    round(float(s_tr.sum()), 3),
+                    sel_dates_str,
+                    sel_cells_cnt,
+                    tuple(sorted(selected_codes))
+                )
+
+                if st.button("📑 Tạo Báo Cáo PDF", key="btn_gen_pdf_3g"):
+                    with st.spinner("⏳ Đang khởi tạo báo cáo PDF 3G..."):
                         _top = lambda col, asc: (cell_agg.nsmallest(10, col) if asc else cell_agg.nlargest(10, col)) if col in cell_agg.columns else pd.DataFrame()
-                        worst10_cssr = _top("CSSR", True)
-                        worst10_dcr = _top("DCR", False)
-                        worst10_soft = _top("SOFTHOSR", True)
-                        worst10_cong = _top("CSCONGES", False)
+                        
+                        worst10_cssr = _top("CSSR", True) if "cssr" in selected_codes else None
+                        worst10_dcr = _top("DCR", False) if "dcr" in selected_codes else None
+                        worst10_soft = _top("SOFTHOSR", True) if "soft" in selected_codes else None
+                        worst10_cong = _top("CSCONGES", False) if "cong" in selected_codes else None
 
                         top10_sites_pdf = top_site_df.head(10) if not top_site_df.empty else pd.DataFrame()
                         top10_cells_pdf = top_cell_df.head(10) if not top_cell_df.empty else pd.DataFrame()
@@ -316,14 +376,27 @@ def render_worst_cells_and_pdf(filtered_df, site_col, cell_col, cell_agg_all, to
 
                         pdf_buf = generate_pdf_report(
                             summary_data, c_data_timeline, top10_sites_pdf, top10_cells_pdf,
-                            worst10_cssr, worst10_dcr, worst10_soft, worst10_cong,
-                            fb_cell_counts, fb_tf_df, cell_type_counts, fb_type_xtab, fb_cv_df
+                            worst10_cssr=worst10_cssr,
+                            worst10_dcr=worst10_dcr,
+                            worst10_soft=worst10_soft,
+                            worst10_cong=worst10_cong,
+                            fb_cell_counts=fb_cell_counts,
+                            fb_tf_df=fb_tf_df,
+                            cell_type_counts=cell_type_counts,
+                            fb_type_xtab=fb_type_xtab,
+                            fb_cv_df=fb_cv_df
                         )
-                        st.session_state["pdf_bytes"] = pdf_buf.getvalue()
-                        st.session_state["pdf_sig"] = _pdf_sig
+                        st.session_state["pdf_bytes_3g"] = pdf_buf.getvalue()
+                        st.session_state["pdf_sig_3g"] = _pdf_sig_3g
 
-                if st.session_state.get("pdf_bytes") is not None:
-                    if st.session_state.get("pdf_sig") == _pdf_sig:
-                        st.download_button(label="⬇️ Tải Báo Cáo PDF", data=st.session_state["pdf_bytes"], file_name="3G_Network_Health.pdf", mime="application/pdf")
+                if st.session_state.get("pdf_bytes_3g") is not None:
+                    if st.session_state.get("pdf_sig_3g") == _pdf_sig_3g:
+                        st.download_button(
+                            label="⬇️ Tải Báo Cáo PDF",
+                            data=st.session_state["pdf_bytes_3g"],
+                            file_name="3G_Network_Health.pdf",
+                            mime="application/pdf",
+                            key="btn_dl_pdf_3g"
+                        )
                     else:
-                        st.info("Bộ lọc đã thay đổi — bấm 'Tạo Báo Cáo PDF' để tạo lại.")
+                        st.info("💡 Lựa chọn danh mục xuất PDF đã thay đổi — bấm 'Tạo Báo Cáo PDF' để cập nhật lại.")
