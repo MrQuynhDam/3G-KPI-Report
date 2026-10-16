@@ -298,10 +298,10 @@ def generate_pdf_report(
 
     # MỤC V. WORST 10 CELLS
     worst_dfs = [
-        ("1. Worst 10 Cells theo Tỷ lệ Thiết lập Cuộc gọi (CSSR):", worst10_cssr, "CSSR", "{:.2f}%", "#991b1b"),
-        ("2. Worst 10 Cells theo Tỷ lệ Rớt Cuộc gọi (DCR):", worst10_dcr, "DCR", "{:.3f}%", "#b91c1c"),
-        ("3. Worst 10 Cells theo Tỷ lệ Chuyển giao Mềm (SOFTHOSR):", worst10_soft, "SOFTHOSR", "{:.2f}%", "#c2410c"),
-        ("4. Worst 10 Cells theo Tỷ lệ Nghẽn Thoại (CSCONGES):", worst10_cong, "CSCONGES", "{:.3f}%", "#ea580c"),
+        ("Worst 10 Cells theo Tỷ lệ Thiết lập Cuộc gọi (CSSR):", worst10_cssr, "CSSR", "{:.2f}%", "#991b1b"),
+        ("Worst 10 Cells theo Tỷ lệ Rớt Cuộc gọi (DCR):", worst10_dcr, "DCR", "{:.3f}%", "#b91c1c"),
+        ("Worst 10 Cells theo Tỷ lệ Chuyển giao Mềm (SOFTHOSR):", worst10_soft, "SOFTHOSR", "{:.2f}%", "#c2410c"),
+        ("Worst 10 Cells theo Tỷ lệ Nghẽn Thoại (CSCONGES):", worst10_cong, "CSCONGES", "{:.3f}%", "#ea580c"),
     ]
 
     has_any_worst = any(df is not None and not df.empty for _, df, _, _, _ in worst_dfs)
